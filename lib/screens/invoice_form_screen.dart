@@ -197,7 +197,7 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                     const SizedBox(height: 12),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<Customer>(
-                      value:
+                      initialValue:
                           _selectedCustomer, // Remove initialValue, use value so we can reset it if needed, or keep it sync
                       decoration: const InputDecoration(
                         labelText: 'Select Existing Customer',
