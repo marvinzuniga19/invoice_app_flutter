@@ -46,7 +46,7 @@ class StatsCard extends StatelessWidget {
             ),
             child: Icon(icon, color: Colors.white, size: 24),
           ),
-          const SizedBox(height: 16),
+          const Spacer(),
           Text(
             title,
             style: const TextStyle(
@@ -55,7 +55,7 @@ class StatsCard extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             value,
             style: const TextStyle(

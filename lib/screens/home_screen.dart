@@ -114,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
-              childAspectRatio: 1.3,
+              childAspectRatio: 1.1, // Adjusted to prevent overflow
               children: [
                 StatsCard(
                   icon: Icons.receipt_long,
