@@ -31,6 +31,8 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _surnameController = TextEditingController();
   final TextEditingController _companyController = TextEditingController();
+  final TextEditingController _invoiceNumberController =
+      TextEditingController();
   final TextEditingController _discountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
@@ -40,6 +42,7 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
     if (widget.invoice != null) {
       _loadInvoiceData();
     } else {
+      _invoiceNumberController.text = InvoiceService.generateInvoiceNumber();
       _addNewItem();
     }
   }
@@ -51,6 +54,7 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
     // The user requirement implies we can edit these fields, so maybe the dropdown is just a helper.
     // I won't try to reverse-engineer which customer it is.
     _selectedCustomer = null;
+    _invoiceNumberController.text = invoice.invoiceNumber;
     _nameController.text = invoice.customerName;
     _surnameController.text = invoice.customerSurname;
     _companyController.text = invoice.customerCompany;
@@ -115,9 +119,25 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
       return;
     }
 
+    // Validate invoice number uniqueness
+    final existingInvoices = InvoiceService.getAllInvoices();
+    final isDuplicate = existingInvoices.any(
+      (inv) =>
+          inv.invoiceNumber == _invoiceNumberController.text &&
+          (widget.invoice == null || inv.id != widget.invoice!.id),
+    );
+
+    if (isDuplicate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invoice number already exists')),
+      );
+      return;
+    }
+
     try {
       if (widget.invoice == null) {
         await InvoiceService.createInvoice(
+          invoiceNumber: _invoiceNumberController.text,
           customerName: _nameController.text,
           customerSurname: _surnameController.text,
           customerCompany: _companyController.text,
@@ -131,7 +151,7 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
       } else {
         final updatedInvoice = Invoice(
           id: widget.invoice!.id,
-          invoiceNumber: widget.invoice!.invoiceNumber,
+          invoiceNumber: _invoiceNumberController.text,
           invoiceDate: _invoiceDate,
           dueDate: _dueDate,
           customerName: _nameController.text,
@@ -183,6 +203,27 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Invoice Number
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextFormField(
+                  controller: _invoiceNumberController,
+                  decoration: const InputDecoration(
+                    labelText: 'Invoice Number',
+                    prefixIcon: Icon(Icons.confirmation_number),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter an invoice number';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // Customer Selection
             Card(
               child: Padding(
@@ -654,6 +695,7 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
     _nameController.dispose();
     _surnameController.dispose();
     _companyController.dispose();
+    _invoiceNumberController.dispose();
     _discountController.dispose();
     _notesController.dispose();
     super.dispose();

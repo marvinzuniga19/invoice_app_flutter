@@ -29,6 +29,7 @@ class InvoiceService {
   // Create new invoice
   static Future<Invoice> createInvoice({
     required String customerName,
+    String? invoiceNumber,
     String customerSurname = '',
     String customerCompany = '',
     required DateTime invoiceDate,
@@ -40,7 +41,7 @@ class InvoiceService {
   }) async {
     final invoice = Invoice(
       id: _uuid.v4(),
-      invoiceNumber: generateInvoiceNumber(),
+      invoiceNumber: invoiceNumber ?? generateInvoiceNumber(),
       invoiceDate: invoiceDate,
       dueDate: dueDate,
       customerName: customerName,
