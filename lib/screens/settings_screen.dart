@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/company.dart';
 import '../services/database_service.dart';
 
@@ -42,6 +45,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _taxRateController = TextEditingController(
       text: _company.defaultTaxRate.toString(),
     );
+  }
+
+  Future<void> _pickLogo() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      final path = result.files.single.path;
+      if (path != null) {
+        setState(() {
+          _company.logoPath = path;
+        });
+      }
+    }
+  }
+
+  void _removeLogo() {
+    setState(() {
+      _company.logoPath = '';
+    });
   }
 
   Future<void> _saveSettings() async {
@@ -88,6 +113,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'Company Information',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: _company.logoPath.isNotEmpty
+                            ? Image.file(
+                                File(_company.logoPath),
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stack) =>
+                                    const Icon(Icons.broken_image),
+                              )
+                            : const Icon(
+                                Icons.image,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _pickLogo,
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Upload Logo'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: _company.logoPath.isNotEmpty
+                                ? _removeLogo
+                                : null,
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Remove'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _nameController,

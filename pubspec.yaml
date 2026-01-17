@@ -57,6 +57,8 @@ dependencies:
 
   # Modern typography
   google_fonts: ^6.2.1
+  # File picker for selecting company logo
+  file_picker: ^8.1.4
 
 dev_dependencies:
   flutter_test:
@@ -68,7 +70,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  
+
   # Hive code generation
   hive_generator: ^2.0.1
   build_runner: ^2.4.13

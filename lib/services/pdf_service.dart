@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../models/invoice.dart';
@@ -13,13 +16,25 @@ class PdfService {
     Company company,
   ) async {
     final pdf = pw.Document();
+    // Try to load logo bytes if a logo path is available
+    Uint8List? logoBytes;
+    if (company.logoPath.isNotEmpty) {
+      try {
+        final file = File(company.logoPath);
+        if (await file.exists()) {
+          logoBytes = await file.readAsBytes();
+        }
+      } catch (_) {
+        logoBytes = null;
+      }
+    }
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         build: (context) => [
-          _buildHeader(company),
+          _buildHeader(company, logoBytes),
           pw.SizedBox(height: 20),
           _buildInvoiceInfo(invoice),
           pw.SizedBox(height: 20),
@@ -41,7 +56,7 @@ class PdfService {
     return pdf;
   }
 
-  static pw.Widget _buildHeader(Company company) {
+  static pw.Widget _buildHeader(Company company, Uint8List? logoBytes) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -49,6 +64,16 @@ class PdfService {
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
+            if (logoBytes != null)
+              pw.Container(
+                width: 80,
+                height: 80,
+                child: pw.Image(
+                  pw.MemoryImage(logoBytes),
+                  fit: pw.BoxFit.contain,
+                ),
+              ),
+            pw.SizedBox(height: 8),
             pw.Text(
               company.name,
               style: pw.TextStyle(
