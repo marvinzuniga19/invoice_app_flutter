@@ -3,9 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../models/invoice.dart';
 import '../models/invoice_item.dart';
-import '../models/customer.dart';
 import '../services/invoice_service.dart';
-import '../services/database_service.dart';
 
 class InvoiceFormScreen extends StatefulWidget {
   final Invoice? invoice;
@@ -20,7 +18,6 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _uuid = const Uuid();
 
-  Customer? _selectedCustomer;
   DateTime _invoiceDate = DateTime.now();
   DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
   List<InvoiceItem> _items = [];
@@ -49,11 +46,6 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
 
   void _loadInvoiceData() {
     final invoice = widget.invoice!;
-    // _selectedCustomer is only for the dropdown, but we don't strictly need it if we have the fields.
-    // However, to show the dropdown as "selected", we might try to find the customer?
-    // The user requirement implies we can edit these fields, so maybe the dropdown is just a helper.
-    // I won't try to reverse-engineer which customer it is.
-    _selectedCustomer = null;
     _invoiceNumberController.text = invoice.invoiceNumber;
     _nameController.text = invoice.customerName;
     _surnameController.text = invoice.customerSurname;
@@ -236,70 +228,6 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<Customer>(
-                      initialValue:
-                          _selectedCustomer, // Remove initialValue, use value so we can reset it if needed, or keep it sync
-                      decoration: const InputDecoration(
-                        labelText: 'Select Existing Customer',
-                        prefixIcon: Icon(Icons.person_search),
-                      ),
-                      items: DatabaseService.getAllCustomers()
-                          .map(
-                            (customer) => DropdownMenuItem(
-                              value: customer,
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    customer.isCompany
-                                        ? Icons.business
-                                        : Icons.person,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      customer.taxId.isNotEmpty
-                                          ? '${customer.displayName} (${customer.taxId})'
-                                          : customer.displayName,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (customer) {
-                        setState(() {
-                          _selectedCustomer = customer;
-                          if (customer != null) {
-                            _nameController.text = customer.name;
-                            _surnameController.text = customer.lastName;
-                            _companyController.text = customer.isCompany
-                                ? customer.name
-                                : '';
-                            if (customer.isCompany) {
-                              // If company, maybe we want to clear name/surname or keep them if they represent contact person?
-                              // User model is ambiguous here. "displayName" logic says if company, name is company name.
-                              // So I will assume Name field in our form is for Person's First Name.
-                              // If it is a company customer, "Name" property serves as Company Name.
-                              // So I will put it in _companyController.
-                              // And clear _nameController? Or put it in _nameController too?
-                              // Let's follow the data. Customer.name is the name.
-                              // If isCompany, Customer.name is Company Name.
-                              // So:
-                              _companyController.text = customer.name;
-                              _nameController.text =
-                                  ''; // Clear person name? Or leave it?
-                              // Actually, if I clear it, validation might fail if I require name.
-                              // But I checked "Name OR Company" in save.
-                            }
-                          }
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(

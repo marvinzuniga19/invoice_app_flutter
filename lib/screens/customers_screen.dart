@@ -40,9 +40,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: Text(isEditing ? 'Edit Customer' : 'New Customer'),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: MediaQuery.of(context).size.width * 0.9,
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
+              maxWidth: MediaQuery.of(context).size.width * 0.9,
+            ),
+            child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,7 +156,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 await DatabaseService.saveCustomer(newCustomer);
                 if (context.mounted) {
                   Navigator.pop(context);
-                  this.setState(() {});
+                  setState(() {});
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
