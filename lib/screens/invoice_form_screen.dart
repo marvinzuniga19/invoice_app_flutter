@@ -3,7 +3,9 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../models/invoice.dart';
 import '../models/invoice_item.dart';
+import '../models/customer.dart';
 import '../services/invoice_service.dart';
+import '../services/database_service.dart';
 
 class InvoiceFormScreen extends StatefulWidget {
   final Invoice? invoice;
@@ -23,7 +25,10 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   List<InvoiceItem> _items = [];
   double _discountPercentage = 0.0;
   String _notes = '';
+
   String _currency = 'USD';
+  List<Customer> _customers = [];
+  Customer? _selectedCustomer;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _surnameController = TextEditingController();
@@ -36,12 +41,19 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   @override
   void initState() {
     super.initState();
+    _loadCustomers();
     if (widget.invoice != null) {
       _loadInvoiceData();
     } else {
       _invoiceNumberController.text = InvoiceService.generateInvoiceNumber();
       _addNewItem();
     }
+  }
+
+  void _loadCustomers() {
+    setState(() {
+      _customers = DatabaseService.getAllCustomers();
+    });
   }
 
   void _loadInvoiceData() {
@@ -58,6 +70,22 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
     _currency = invoice.currency;
     _discountController.text = _discountPercentage.toString();
     _notesController.text = _notes;
+
+    // Try to find the matching customer
+    try {
+      if (_customers.isNotEmpty) {
+        _selectedCustomer = _customers.firstWhere((c) {
+          if (c.isCompany) {
+            return c.name == invoice.customerCompany;
+          }
+          return c.name == invoice.customerName &&
+              c.lastName == invoice.customerSurname;
+        });
+      }
+    } catch (_) {
+      // Customer might have been deleted or details changed, simply don't select any
+      _selectedCustomer = null;
+    }
   }
 
   void _addNewItem() {
@@ -228,6 +256,45 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
+                    if (_customers.isNotEmpty) ...[
+                      DropdownButtonFormField<Customer>(
+                        key: ValueKey(_selectedCustomer),
+                        decoration: const InputDecoration(
+                          labelText: 'Select Existing Customer',
+                          prefixIcon: Icon(Icons.people),
+                          border: OutlineInputBorder(),
+                        ),
+                        initialValue: _selectedCustomer,
+                        items: _customers.map((customer) {
+                          return DropdownMenuItem(
+                            value: customer,
+                            child: Text(
+                              customer.displayName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (customer) {
+                          setState(() {
+                            _selectedCustomer = customer;
+                            if (customer != null) {
+                              if (customer.isCompany) {
+                                _companyController.text = customer.name;
+                                _nameController.clear();
+                                _surnameController.clear();
+                              } else {
+                                _nameController.text = customer.name;
+                                _surnameController.text = customer.lastName;
+                                _companyController.clear();
+                              }
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                    ],
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(
