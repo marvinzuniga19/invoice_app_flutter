@@ -34,8 +34,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _regNumberController;
   late TextEditingController _taxRateController;
 
-  // Local state for logo path updates before saving
+  // Local state
   String? _newLogoPath;
+  String _defaultCurrency = 'USD';
 
   // Track if we initialized controllers
   bool _controllersInitialized = false;
@@ -77,6 +78,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _taxIdController.text = company.taxId;
     _regNumberController.text = company.registrationNumber;
     _taxRateController.text = company.defaultTaxRate.toString();
+    _defaultCurrency = company.defaultCurrency;
     _controllersInitialized = true;
   }
 
@@ -105,9 +107,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _saveSettings() async {
     final currentCompany = ref.read(settingsProvider).company;
 
-    // Create a new Company object or update existing one?
-    // Since it's HiveObject, let's create a new object with updated fields or update the fields.
-    // Ideally we pass a new object to the provider.
     final updatedCompany = Company(
       name: _nameController.text,
       email: _emailController.text,
@@ -120,41 +119,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       taxId: _taxIdController.text,
       registrationNumber: _regNumberController.text,
       logoPath: _newLogoPath ?? currentCompany.logoPath,
-      defaultCurrency: currentCompany
-          .defaultCurrency, // Managed by dropdown directly updating state if we want, or here.
+      defaultCurrency: _defaultCurrency,
       defaultTaxRate: double.tryParse(_taxRateController.text) ?? 0.0,
     );
 
-    // We can't easily construct Company if we don't know the ID or if it's strictly the same object reference for Hive?
-    // DatabaseService.getCompany() returns the singleton object 0?
-    // Let's modify the fields of the CURRENT object if possible, or assume Provider handles save.
-    // Provider.updateCompany(company) saves it.
-    // But we need to make sure we don't lose the ID or Hive linkage if we create a NEW object?
-    // Company model in this codebase seems to be a HiveObject.
-    // If we create a new instance, it's not the same HiveObject.
-    // So we should copy values to the existing object or DatabaseService.saveCompany handles it?
-    // Checking DatabaseService.saveCompany... usually simple put.
-
-    // Let's assume we copy fields to the retrieved company and save that.
-    currentCompany.name = _nameController.text;
-    currentCompany.email = _emailController.text;
-    currentCompany.phone = _phoneController.text;
-    currentCompany.address = _addressController.text;
-    currentCompany.city = _cityController.text;
-    currentCompany.state = _stateController.text;
-    currentCompany.zipCode = _zipController.text;
-    currentCompany.country = _countryController.text;
-    currentCompany.taxId = _taxIdController.text;
-    currentCompany.registrationNumber = _regNumberController.text;
-    if (_newLogoPath != null) currentCompany.logoPath = _newLogoPath!;
-    currentCompany.defaultTaxRate =
-        double.tryParse(_taxRateController.text) ?? 0.0;
-    // defaultCurrency is updated via setState on change? No, let's read it from currentCompany which might be stale in UI if we didn't update it?
-    // Actually the dropdown below updates _company.defaultCurrency?
-    // Wait, the previous code updated _company.defaultCurrency in setState.
-    // We should do the same or update our local copy.
-
-    await ref.read(settingsProvider.notifier).updateCompany(currentCompany);
+    // Save the new company object
+    await ref.read(settingsProvider.notifier).updateCompany(updatedCompany);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -375,8 +345,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: company
-                        .defaultCurrency, // Use value from provider/company
+                    initialValue: _defaultCurrency,
                     decoration: const InputDecoration(
                       labelText: 'Default Currency',
                       prefixIcon: Icon(Icons.attach_money),
@@ -397,11 +366,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ],
                     onChanged: (value) {
-                      // We can update the local company object immediately and UI will reflect if we use local state or just update the object.
-                      // Updating the object reference directly works if we save later.
                       if (value != null) {
                         setState(() {
-                          company.defaultCurrency = value;
+                          _defaultCurrency = value;
                         });
                       }
                     },

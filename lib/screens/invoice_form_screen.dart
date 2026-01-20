@@ -360,7 +360,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                           prefixIcon: Icon(Icons.people),
                           border: OutlineInputBorder(),
                         ),
-                        value: _selectedCustomer,
+                        initialValue: _selectedCustomer,
                         // Fix for: 'items' must contain 'value'. If _selectedCustomer is not in list (e.g. deleted), null it.
                         // We handled loaded/match logic, but if not in list, fallback to null.
                         // We need to ensure _selectedCustomer IS in 'customers' or null.
