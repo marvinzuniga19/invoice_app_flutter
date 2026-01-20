@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 import '../models/customer.dart';
 import '../services/database_service.dart';
+import 'customer_form_dialog.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});
@@ -24,154 +24,24 @@ class _CustomersScreenState extends State<CustomersScreen> {
     }).toList();
   }
 
-  void _showCustomerDialog([Customer? customer]) {
-    final isEditing = customer != null;
-    final nameController = TextEditingController(text: customer?.name ?? '');
-    final lastNameController = TextEditingController(
-      text: customer?.lastName ?? '',
-    );
-    final emailController = TextEditingController(text: customer?.email ?? '');
-    final phoneController = TextEditingController(text: customer?.phone ?? '');
-    final taxIdController = TextEditingController(text: customer?.taxId ?? '');
-    bool isCompany = customer?.isCompany ?? false;
-
-    showDialog(
+  Future<void> _showCustomerDialog([Customer? customer]) async {
+    final result = await showDialog<Customer>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(isEditing ? 'Edit Customer' : 'New Customer'),
-          content: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.6,
-              maxWidth: MediaQuery.of(context).size.width * 0.9,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SwitchListTile(
-                    title: const Text('Is Company'),
-                    subtitle: Text(
-                      isCompany ? 'Company/Business' : 'Individual Person',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                    value: isCompany,
-                    onChanged: (value) {
-                      setState(() {
-                        isCompany = value;
-                        if (value) {
-                          lastNameController.clear();
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: isCompany ? 'Company Name *' : 'First Name *',
-                      prefixIcon: Icon(
-                        isCompany ? Icons.business : Icons.person,
-                      ),
-                      border: const OutlineInputBorder(),
-                    ),
-                    textCapitalization: TextCapitalization.words,
-                  ),
-                  if (!isCompany) ...[
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: lastNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Last Name',
-                        prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(),
-                      ),
-                      textCapitalization: TextCapitalization.words,
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email),
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: phoneController,
-                    decoration: const InputDecoration(
-                      labelText: 'Phone',
-                      prefixIcon: Icon(Icons.phone),
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: taxIdController,
-                    decoration: const InputDecoration(
-                      labelText: 'Tax ID / Fiscal Number',
-                      prefixIcon: Icon(Icons.numbers),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
+      builder: (context) => CustomerFormDialog(customer: customer),
+    );
+
+    if (result != null) {
+      setState(() {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              customer != null ? 'Customer updated' : 'Customer added',
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        isCompany
-                            ? 'Company name is required'
-                            : 'First name is required',
-                      ),
-                    ),
-                  );
-                  return;
-                }
-
-                final newCustomer = Customer(
-                  id: customer?.id ?? const Uuid().v4(),
-                  name: nameController.text,
-                  lastName: lastNameController.text,
-                  isCompany: isCompany,
-                  email: emailController.text,
-                  phone: phoneController.text,
-                  taxId: taxIdController.text,
-                );
-
-                await DatabaseService.saveCustomer(newCustomer);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        isEditing ? 'Customer updated' : 'Customer added',
-                      ),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
+        );
+      }
+    }
   }
 
   Future<void> _deleteCustomer(Customer customer) async {

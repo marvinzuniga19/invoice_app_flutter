@@ -6,6 +6,9 @@ import '../models/invoice_item.dart';
 import '../models/customer.dart';
 import '../services/invoice_service.dart';
 import '../services/database_service.dart';
+import '../models/product.dart';
+import 'inventory_screen.dart';
+import 'customer_form_dialog.dart';
 
 class InvoiceFormScreen extends StatefulWidget {
   final Invoice? invoice;
@@ -106,6 +109,30 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
     setState(() {
       _items.removeAt(index);
     });
+  }
+
+  Future<void> _pickProduct() async {
+    final Product? product = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const InventoryScreen(isPicker: true),
+      ),
+    );
+
+    if (product != null) {
+      if (!mounted) return;
+      setState(() {
+        _items.add(
+          InvoiceItem(
+            id: _uuid.v4(),
+            description: product.description ?? product.name,
+            quantity: 1,
+            unitPrice: product.price,
+            taxPercentage: product.taxPercentage,
+          ),
+        );
+      });
+    }
   }
 
   double get _subtotal => _items.fold(0.0, (sum, item) => sum + item.subtotal);
@@ -251,9 +278,35 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Customer',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Customer',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        TextButton.icon(
+                          onPressed: () async {
+                            final newCustomer = await showDialog<Customer>(
+                              context: context,
+                              builder: (context) => const CustomerFormDialog(),
+                            );
+                            if (newCustomer != null) {
+                              _loadCustomers();
+                              setState(() {
+                                _selectedCustomer = newCustomer;
+                                _nameController.text = newCustomer.name;
+                                _surnameController.text = newCustomer.lastName;
+                                _companyController.text = newCustomer.isCompany
+                                    ? newCustomer.name
+                                    : '';
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add New'),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     if (_customers.isNotEmpty) ...[
@@ -464,10 +517,20 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                           'Items',
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        TextButton.icon(
-                          onPressed: _addNewItem,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Add Item'),
+                        Row(
+                          children: [
+                            TextButton.icon(
+                              onPressed: _pickProduct,
+                              icon: const Icon(Icons.inventory),
+                              label: const Text('From Inventory'),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              onPressed: _addNewItem,
+                              icon: const Icon(Icons.add),
+                              label: const Text('Add Item'),
+                            ),
+                          ],
                         ),
                       ],
                     ),

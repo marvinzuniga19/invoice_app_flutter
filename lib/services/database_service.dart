@@ -3,11 +3,13 @@ import '../models/invoice.dart';
 import '../models/customer.dart';
 import '../models/company.dart';
 import '../models/invoice_item.dart';
+import '../models/product.dart';
 
 class DatabaseService {
   static const String invoicesBox = 'invoices';
   static const String customersBox = 'customers';
   static const String companyBox = 'company';
+  static const String productsBox = 'products';
 
   static Future<void> init() async {
     await Hive.initFlutter();
@@ -17,11 +19,13 @@ class DatabaseService {
     Hive.registerAdapter(CustomerAdapter());
     Hive.registerAdapter(CompanyAdapter());
     Hive.registerAdapter(InvoiceAdapter());
+    Hive.registerAdapter(ProductAdapter());
 
     // Open boxes
     await Hive.openBox<Invoice>(invoicesBox);
     await Hive.openBox<Customer>(customersBox);
     await Hive.openBox<Company>(companyBox);
+    await Hive.openBox<Product>(productsBox);
   }
 
   // Invoice operations
@@ -72,5 +76,24 @@ class DatabaseService {
 
   static Company getCompany() {
     return companyBoxInstance.get('company') ?? Company();
+  }
+
+  // Product operations
+  static Box<Product> get productsBoxInstance => Hive.box<Product>(productsBox);
+
+  static Future<void> saveProduct(Product product) async {
+    await productsBoxInstance.put(product.id, product);
+  }
+
+  static Future<void> deleteProduct(String id) async {
+    await productsBoxInstance.delete(id);
+  }
+
+  static Product? getProduct(String id) {
+    return productsBoxInstance.get(id);
+  }
+
+  static List<Product> getAllProducts() {
+    return productsBoxInstance.values.toList();
   }
 }
