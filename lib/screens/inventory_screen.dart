@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
 import '../providers/inventory_provider.dart';
+import '../widgets/product_card.dart';
 import 'product_form_screen.dart';
 
 class InventoryScreen extends ConsumerStatefulWidget {
@@ -17,6 +17,7 @@ class InventoryScreen extends ConsumerStatefulWidget {
 class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
+  bool _isSearching = false;
 
   @override
   void initState() {
@@ -61,74 +62,110 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         .search(_searchQuery);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Inventory')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Search Products',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                          });
-                        },
-                      )
-                    : null,
-                border: const OutlineInputBorder(),
-              ),
-              onChanged: (value) {
+      appBar: AppBar(
+        leading: _isSearching
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  setState(() {
+                    _isSearching = false;
+                    _searchQuery = '';
+                    _searchController.clear();
+                  });
+                },
+              )
+            : null,
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search...',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: Colors.white70),
+                ),
+                style: const TextStyle(color: Colors.white),
+                cursorColor: Colors.white,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              )
+            : const Text('Inventory'),
+        elevation: 0,
+        actions: [
+          if (_isSearching)
+            IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () {
+                if (_searchController.text.isEmpty) {
+                  setState(() {
+                    _isSearching = false;
+                  });
+                } else {
+                  _searchController.clear();
+                  setState(() {
+                    _searchQuery = '';
+                  });
+                }
+              },
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () {
                 setState(() {
-                  _searchQuery = value;
+                  _isSearching = true;
                 });
               },
             ),
-          ),
-          Expanded(
-            child: products.isEmpty
-                ? Center(
-                    child: Text(
-                      _searchQuery.isEmpty
-                          ? 'No products found'
-                          : 'No matching products',
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: products.length,
-                    itemBuilder: (context, index) {
-                      final product = products[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: product.imagePath != null
-                              ? FileImage(File(product.imagePath!))
-                              : null,
-                          child: product.imagePath == null
-                              ? Text(product.name[0].toUpperCase())
-                              : null,
-                        ),
-                        title: Text(product.name),
-                        subtitle: Text(
-                          '${product.sku ?? 'No SKU'} • Stock: ${product.stockQuantity.toStringAsFixed(0)}',
-                        ),
-                        trailing: Text(
-                          '\$${product.price.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        onTap: () async {
-                          if (widget.isPicker) {
-                            Navigator.pop(context, product);
-                            return;
-                          }
+        ],
+      ),
+      body: products.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _searchQuery.isEmpty
+                        ? 'No products in inventory'
+                        : 'No matching products found',
+                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: products.length,
+              itemBuilder: (context, index) {
+                final product = products[index];
+                return ProductCard(
+                  product: product,
+                  onTap: () async {
+                    if (widget.isPicker) {
+                      Navigator.pop(context, product);
+                      return;
+                    }
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ProductFormScreen(product: product),
+                      ),
+                    );
+                    ref.invalidate(inventoryListProvider);
+                  },
+                  onEdit: widget.isPicker
+                      ? null
+                      : () async {
                           await Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -138,16 +175,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                           );
                           ref.invalidate(inventoryListProvider);
                         },
-                        onLongPress: () => _deleteProduct(product),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
+                  onDelete: widget.isPicker
+                      ? null
+                      : () => _deleteProduct(product),
+                );
+              },
+            ),
       floatingActionButton: widget.isPicker
           ? null
-          : FloatingActionButton(
+          : FloatingActionButton.extended(
               onPressed: () async {
                 await Navigator.push(
                   context,
@@ -157,7 +193,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                 );
                 ref.invalidate(inventoryListProvider);
               },
-              child: const Icon(Icons.add),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Product'),
             ),
     );
   }
