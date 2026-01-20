@@ -33,7 +33,7 @@ class InvoiceApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: settings.themeMode,
       home: settings.isFirstRun ? const OnboardingScreen() : const HomeScreen(),
     );
   }

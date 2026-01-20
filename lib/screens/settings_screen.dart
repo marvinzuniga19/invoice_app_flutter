@@ -163,6 +163,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
+                    'Appearance',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<ThemeMode>(
+                      segments: const [
+                        ButtonSegment(
+                          value: ThemeMode.light,
+                          icon: Icon(Icons.light_mode),
+                          label: Text('Light'),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.system,
+                          icon: Icon(Icons.brightness_auto),
+                          label: Text('System'),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.dark,
+                          icon: Icon(Icons.dark_mode),
+                          label: Text('Dark'),
+                        ),
+                      ],
+                      selected: {settingsState.themeMode},
+                      onSelectionChanged: (Set<ThemeMode> newSelection) {
+                        ref
+                            .read(settingsProvider.notifier)
+                            .setThemeMode(newSelection.first);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
                     'Company Information',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
