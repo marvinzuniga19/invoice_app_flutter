@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/customer.dart';
-import '../services/database_service.dart';
 
 class CustomerFormDialog extends StatefulWidget {
   final Customer? customer;
@@ -148,7 +147,7 @@ class _CustomerFormDialogState extends State<CustomerFormDialog> {
               taxId: _taxIdController.text,
             );
 
-            await DatabaseService.saveCustomer(newCustomer);
+            // await DatabaseService.saveCustomer(newCustomer); // Handled by caller via Riverpod
             if (context.mounted) {
               Navigator.pop(context, newCustomer);
             }

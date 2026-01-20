@@ -1,33 +1,26 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
-import '../services/inventory_service.dart';
+import '../providers/inventory_provider.dart';
 import 'product_form_screen.dart';
 
-class InventoryScreen extends StatefulWidget {
+class InventoryScreen extends ConsumerStatefulWidget {
   final bool isPicker;
 
   const InventoryScreen({super.key, this.isPicker = false});
 
   @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
+  ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen> {
-  List<Product> _products = [];
+class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadProducts();
-  }
-
-  void _loadProducts() {
-    setState(() {
-      _products = InventoryService.searchProducts(_searchQuery);
-    });
   }
 
   void _deleteProduct(Product product) {
@@ -44,8 +37,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              await InventoryService.deleteProduct(product.id);
-              _loadProducts();
+              await ref
+                  .read(inventoryListProvider.notifier)
+                  .deleteProduct(product.id);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Product deleted successfully')),
@@ -61,6 +55,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(inventoryListProvider); // Watch for changes
+    final products = ref
+        .read(inventoryListProvider.notifier)
+        .search(_searchQuery);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Inventory')),
       body: Column(
@@ -80,7 +79,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           setState(() {
                             _searchQuery = '';
                           });
-                          _loadProducts();
                         },
                       )
                     : null,
@@ -90,12 +88,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 setState(() {
                   _searchQuery = value;
                 });
-                _loadProducts();
               },
             ),
           ),
           Expanded(
-            child: _products.isEmpty
+            child: products.isEmpty
                 ? Center(
                     child: Text(
                       _searchQuery.isEmpty
@@ -104,9 +101,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                   )
                 : ListView.builder(
-                    itemCount: _products.length,
+                    itemCount: products.length,
                     itemBuilder: (context, index) {
-                      final product = _products[index];
+                      final product = products[index];
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundImage: product.imagePath != null
@@ -139,7 +136,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                   ProductFormScreen(product: product),
                             ),
                           );
-                          _loadProducts();
+                          ref.invalidate(inventoryListProvider);
                         },
                         onLongPress: () => _deleteProduct(product),
                       );
@@ -158,7 +155,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     builder: (context) => const ProductFormScreen(),
                   ),
                 );
-                _loadProducts();
+                ref.invalidate(inventoryListProvider);
               },
               child: const Icon(Icons.add),
             ),

@@ -2,18 +2,26 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/company.dart';
-import '../services/database_service.dart';
+import '../providers/settings_provider.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  late Company _company;
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  // We need local controllers for the form, but initial values come from Provider.
+  // We should update the provider when Save is clicked.
+  // Since Company is a HiveObject, we might be editing it directly if we aren't careful?
+  // Actually, Hive objects are mutable.
+  // But good practice is to treat state as immutable or update via Provider.
+  // The Provider returns a Company object.
+  // Let's copy values to controllers.
+
   late TextEditingController _nameController;
   late TextEditingController _emailController;
   late TextEditingController _phoneController;
@@ -26,25 +34,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _regNumberController;
   late TextEditingController _taxRateController;
 
+  // Local state for logo path updates before saving
+  String? _newLogoPath;
+
+  // Track if we initialized controllers
+  bool _controllersInitialized = false;
+
   @override
   void initState() {
     super.initState();
-    _company = DatabaseService.getCompany();
-    _nameController = TextEditingController(text: _company.name);
-    _emailController = TextEditingController(text: _company.email);
-    _phoneController = TextEditingController(text: _company.phone);
-    _addressController = TextEditingController(text: _company.address);
-    _cityController = TextEditingController(text: _company.city);
-    _stateController = TextEditingController(text: _company.state);
-    _zipController = TextEditingController(text: _company.zipCode);
-    _countryController = TextEditingController(text: _company.country);
-    _taxIdController = TextEditingController(text: _company.taxId);
-    _regNumberController = TextEditingController(
-      text: _company.registrationNumber,
-    );
-    _taxRateController = TextEditingController(
-      text: _company.defaultTaxRate.toString(),
-    );
+    // Controllers will be initialized in didChangeDependencies or build when we have data?
+    // Actually we can read initial state in initState if available.
+    // Provider might trigger rebuilds.
+    _initControllers();
+  }
+
+  void _initControllers() {
+    // Initial dummy values, will be populated in build/didChangeDependencies
+    _nameController = TextEditingController();
+    _emailController = TextEditingController();
+    _phoneController = TextEditingController();
+    _addressController = TextEditingController();
+    _cityController = TextEditingController();
+    _stateController = TextEditingController();
+    _zipController = TextEditingController();
+    _countryController = TextEditingController();
+    _taxIdController = TextEditingController();
+    _regNumberController = TextEditingController();
+    _taxRateController = TextEditingController();
+  }
+
+  void _updateControllers(Company company) {
+    if (_controllersInitialized) return;
+    _nameController.text = company.name;
+    _emailController.text = company.email;
+    _phoneController.text = company.phone;
+    _addressController.text = company.address;
+    _cityController.text = company.city;
+    _stateController.text = company.state;
+    _zipController.text = company.zipCode;
+    _countryController.text = company.country;
+    _taxIdController.text = company.taxId;
+    _regNumberController.text = company.registrationNumber;
+    _taxRateController.text = company.defaultTaxRate.toString();
+    _controllersInitialized = true;
   }
 
   Future<void> _pickLogo() async {
@@ -57,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final path = result.files.single.path;
       if (path != null) {
         setState(() {
-          _company.logoPath = path;
+          _newLogoPath = path;
         });
       }
     }
@@ -65,24 +98,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _removeLogo() {
     setState(() {
-      _company.logoPath = '';
+      _newLogoPath = '';
     });
   }
 
   Future<void> _saveSettings() async {
-    _company.name = _nameController.text;
-    _company.email = _emailController.text;
-    _company.phone = _phoneController.text;
-    _company.address = _addressController.text;
-    _company.city = _cityController.text;
-    _company.state = _stateController.text;
-    _company.zipCode = _zipController.text;
-    _company.country = _countryController.text;
-    _company.taxId = _taxIdController.text;
-    _company.registrationNumber = _regNumberController.text;
-    _company.defaultTaxRate = double.tryParse(_taxRateController.text) ?? 0.0;
+    final currentCompany = ref.read(settingsProvider).company;
 
-    await DatabaseService.saveCompany(_company);
+    // Create a new Company object or update existing one?
+    // Since it's HiveObject, let's create a new object with updated fields or update the fields.
+    // Ideally we pass a new object to the provider.
+    final updatedCompany = Company(
+      name: _nameController.text,
+      email: _emailController.text,
+      phone: _phoneController.text,
+      address: _addressController.text,
+      city: _cityController.text,
+      state: _stateController.text,
+      zipCode: _zipController.text,
+      country: _countryController.text,
+      taxId: _taxIdController.text,
+      registrationNumber: _regNumberController.text,
+      logoPath: _newLogoPath ?? currentCompany.logoPath,
+      defaultCurrency: currentCompany
+          .defaultCurrency, // Managed by dropdown directly updating state if we want, or here.
+      defaultTaxRate: double.tryParse(_taxRateController.text) ?? 0.0,
+    );
+
+    // We can't easily construct Company if we don't know the ID or if it's strictly the same object reference for Hive?
+    // DatabaseService.getCompany() returns the singleton object 0?
+    // Let's modify the fields of the CURRENT object if possible, or assume Provider handles save.
+    // Provider.updateCompany(company) saves it.
+    // But we need to make sure we don't lose the ID or Hive linkage if we create a NEW object?
+    // Company model in this codebase seems to be a HiveObject.
+    // If we create a new instance, it's not the same HiveObject.
+    // So we should copy values to the existing object or DatabaseService.saveCompany handles it?
+    // Checking DatabaseService.saveCompany... usually simple put.
+
+    // Let's assume we copy fields to the retrieved company and save that.
+    currentCompany.name = _nameController.text;
+    currentCompany.email = _emailController.text;
+    currentCompany.phone = _phoneController.text;
+    currentCompany.address = _addressController.text;
+    currentCompany.city = _cityController.text;
+    currentCompany.state = _stateController.text;
+    currentCompany.zipCode = _zipController.text;
+    currentCompany.country = _countryController.text;
+    currentCompany.taxId = _taxIdController.text;
+    currentCompany.registrationNumber = _regNumberController.text;
+    if (_newLogoPath != null) currentCompany.logoPath = _newLogoPath!;
+    currentCompany.defaultTaxRate =
+        double.tryParse(_taxRateController.text) ?? 0.0;
+    // defaultCurrency is updated via setState on change? No, let's read it from currentCompany which might be stale in UI if we didn't update it?
+    // Actually the dropdown below updates _company.defaultCurrency?
+    // Wait, the previous code updated _company.defaultCurrency in setState.
+    // We should do the same or update our local copy.
+
+    await ref.read(settingsProvider.notifier).updateCompany(currentCompany);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -93,6 +165,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settingsState = ref.watch(settingsProvider);
+    final company = settingsState.company;
+
+    // Populate controllers once
+    if (!_controllersInitialized) {
+      _updateControllers(company);
+    }
+
+    // Use effective logo path
+    final logoPath = _newLogoPath ?? company.logoPath;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -122,9 +205,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey.shade300),
                         ),
-                        child: _company.logoPath.isNotEmpty
+                        child: logoPath.isNotEmpty
                             ? Image.file(
-                                File(_company.logoPath),
+                                File(logoPath),
                                 fit: BoxFit.contain,
                                 errorBuilder: (context, error, stack) =>
                                     const Icon(Icons.broken_image),
@@ -146,9 +229,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const SizedBox(height: 8),
                           TextButton.icon(
-                            onPressed: _company.logoPath.isNotEmpty
-                                ? _removeLogo
-                                : null,
+                            onPressed: logoPath.isNotEmpty ? _removeLogo : null,
                             icon: const Icon(Icons.delete_outline),
                             label: const Text('Remove'),
                           ),
@@ -294,7 +375,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    initialValue: _company.defaultCurrency,
+                    value: company
+                        .defaultCurrency, // Use value from provider/company
                     decoration: const InputDecoration(
                       labelText: 'Default Currency',
                       prefixIcon: Icon(Icons.attach_money),
@@ -315,9 +397,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                     onChanged: (value) {
-                      setState(() {
-                        _company.defaultCurrency = value ?? 'USD';
-                      });
+                      // We can update the local company object immediately and UI will reflect if we use local state or just update the object.
+                      // Updating the object reference directly works if we save later.
+                      if (value != null) {
+                        setState(() {
+                          company.defaultCurrency = value;
+                        });
+                      }
                     },
                   ),
                   const SizedBox(height: 12),

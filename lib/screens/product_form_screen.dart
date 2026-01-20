@@ -1,19 +1,20 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
-import '../services/inventory_service.dart';
+import '../providers/inventory_provider.dart';
 
-class ProductFormScreen extends StatefulWidget {
+class ProductFormScreen extends ConsumerStatefulWidget {
   final Product? product;
 
   const ProductFormScreen({super.key, this.product});
 
   @override
-  State<ProductFormScreen> createState() => _ProductFormScreenState();
+  ConsumerState<ProductFormScreen> createState() => _ProductFormScreenState();
 }
 
-class _ProductFormScreenState extends State<ProductFormScreen> {
+class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _skuController = TextEditingController();
@@ -72,24 +73,30 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     try {
       if (widget.product == null) {
-        await InventoryService.createProduct(
-          name: name,
-          price: price,
-          sku: sku,
-          stockQuantity: stock,
-          description: description,
-          taxPercentage: tax,
-          imagePath: _selectedImage,
-        );
+        await ref
+            .read(inventoryListProvider.notifier)
+            .createProduct(
+              name: name,
+              price: price,
+              sku: sku,
+              stockQuantity: stock,
+              description: description,
+              taxPercentage: tax,
+              imagePath: _selectedImage,
+            );
       } else {
-        widget.product!.name = name;
-        widget.product!.price = price;
-        widget.product!.sku = sku;
-        widget.product!.stockQuantity = stock;
-        widget.product!.description = description;
-        widget.product!.taxPercentage = tax;
-        widget.product!.imagePath = _selectedImage;
-        await InventoryService.updateProduct(widget.product!);
+        final updatedProduct = widget.product!
+          ..name = name
+          ..price = price
+          ..sku = sku
+          ..stockQuantity = stock
+          ..description = description
+          ..taxPercentage = tax
+          ..imagePath = _selectedImage;
+
+        await ref
+            .read(inventoryListProvider.notifier)
+            .updateProduct(updatedProduct);
       }
 
       if (mounted) {

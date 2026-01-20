@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/invoice.dart';
 import '../services/invoice_service.dart';
+import '../providers/invoice_provider.dart';
 import '../widgets/invoice_card.dart';
 import '../widgets/stats_card.dart';
 import 'invoice_form_screen.dart';
@@ -10,14 +12,14 @@ import 'customers_screen.dart';
 import 'settings_screen.dart';
 import 'inventory_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _searchQuery = '';
   String _filterStatus = 'All';
   final TextEditingController _searchController = TextEditingController();
@@ -29,11 +31,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Invoice> _getFilteredInvoices() {
-    List<Invoice> invoices = InvoiceService.getAllInvoices();
+    List<Invoice> invoices = ref.watch(invoiceListProvider);
 
     // Apply search
     if (_searchQuery.isNotEmpty) {
-      invoices = InvoiceService.searchInvoices(_searchQuery);
+      invoices = invoices.where((inv) {
+        return inv.customerName.toLowerCase().contains(
+              _searchQuery.toLowerCase(),
+            ) ||
+            inv.invoiceNumber.toLowerCase().contains(
+              _searchQuery.toLowerCase(),
+            );
+      }).toList();
     }
 
     // Apply status filter
@@ -54,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context) => InvoiceFormScreen(invoice: invoice),
       ),
     );
-    setState(() {});
+    ref.invalidate(invoiceListProvider);
   }
 
   void _navigateToInvoiceDetail(Invoice invoice) async {
@@ -64,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context) => InvoiceDetailScreen(invoice: invoice),
       ),
     );
-    setState(() {});
+    ref.invalidate(invoiceListProvider);
   }
 
   @override
@@ -143,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          setState(() {});
+          ref.invalidate(invoiceListProvider);
         },
         child: ListView(
           padding: const EdgeInsets.all(16),

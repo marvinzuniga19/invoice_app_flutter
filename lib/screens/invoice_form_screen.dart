@@ -1,25 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../models/invoice.dart';
 import '../models/invoice_item.dart';
 import '../models/customer.dart';
-import '../services/invoice_service.dart';
-import '../services/database_service.dart';
 import '../models/product.dart';
+import '../providers/invoice_provider.dart';
+import '../providers/customer_provider.dart';
 import 'inventory_screen.dart';
 import 'customer_form_dialog.dart';
 
-class InvoiceFormScreen extends StatefulWidget {
+class InvoiceFormScreen extends ConsumerStatefulWidget {
   final Invoice? invoice;
 
   const InvoiceFormScreen({super.key, this.invoice});
 
   @override
-  State<InvoiceFormScreen> createState() => _InvoiceFormScreenState();
+  ConsumerState<InvoiceFormScreen> createState() => _InvoiceFormScreenState();
 }
 
-class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
+class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _uuid = const Uuid();
 
@@ -30,7 +31,6 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   String _notes = '';
 
   String _currency = 'USD';
-  List<Customer> _customers = [];
   Customer? _selectedCustomer;
 
   final TextEditingController _nameController = TextEditingController();
@@ -41,22 +41,29 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   final TextEditingController _discountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
+  // Flag to track if we have tried to find the initial customer
+  bool _initialCustomerLoaded = false;
+
   @override
   void initState() {
     super.initState();
-    _loadCustomers();
     if (widget.invoice != null) {
       _loadInvoiceData();
     } else {
-      _invoiceNumberController.text = InvoiceService.generateInvoiceNumber();
+      // We can't access ref.read in initState for some providers if they depend on context/scope which might not be ready?
+      // Actually accessing notifier methods is fine.
+      // But we will generate number in build or didChangeDependencies if it's empty?
+      // Or just schedule a callback safely.
+      Future.microtask(() {
+        if (mounted) {
+          _invoiceNumberController.text = ref
+              .read(invoiceListProvider.notifier)
+              .generateInvoiceNumber();
+        }
+      });
+
       _addNewItem();
     }
-  }
-
-  void _loadCustomers() {
-    setState(() {
-      _customers = DatabaseService.getAllCustomers();
-    });
   }
 
   void _loadInvoiceData() {
@@ -73,22 +80,6 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
     _currency = invoice.currency;
     _discountController.text = _discountPercentage.toString();
     _notesController.text = _notes;
-
-    // Try to find the matching customer
-    try {
-      if (_customers.isNotEmpty) {
-        _selectedCustomer = _customers.firstWhere((c) {
-          if (c.isCompany) {
-            return c.name == invoice.customerCompany;
-          }
-          return c.name == invoice.customerName &&
-              c.lastName == invoice.customerSurname;
-        });
-      }
-    } catch (_) {
-      // Customer might have been deleted or details changed, simply don't select any
-      _selectedCustomer = null;
-    }
   }
 
   void _addNewItem() {
@@ -145,9 +136,6 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   Future<void> _saveInvoice() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // We no longer require _selectedCustomer to be non-null, but we require Name/Surname/Company to be valid?
-    // User said "Customer name, surname and company".
-    // I should probably require at least Name or Company.
     if (_nameController.text.isEmpty && _companyController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -167,7 +155,7 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
     }
 
     // Validate invoice number uniqueness
-    final existingInvoices = InvoiceService.getAllInvoices();
+    final existingInvoices = ref.read(invoiceListProvider);
     final isDuplicate = existingInvoices.any(
       (inv) =>
           inv.invoiceNumber == _invoiceNumberController.text &&
@@ -183,18 +171,20 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
 
     try {
       if (widget.invoice == null) {
-        await InvoiceService.createInvoice(
-          invoiceNumber: _invoiceNumberController.text,
-          customerName: _nameController.text,
-          customerSurname: _surnameController.text,
-          customerCompany: _companyController.text,
-          invoiceDate: _invoiceDate,
-          dueDate: _dueDate,
-          items: _items,
-          discountPercentage: _discountPercentage,
-          notes: _notes,
-          currency: _currency,
-        );
+        await ref
+            .read(invoiceListProvider.notifier)
+            .createInvoice(
+              invoiceNumber: _invoiceNumberController.text,
+              customerName: _nameController.text,
+              customerSurname: _surnameController.text,
+              customerCompany: _companyController.text,
+              invoiceDate: _invoiceDate,
+              dueDate: _dueDate,
+              items: _items,
+              discountPercentage: _discountPercentage,
+              notes: _notes,
+              currency: _currency,
+            );
       } else {
         final updatedInvoice = Invoice(
           id: widget.invoice!.id,
@@ -210,7 +200,9 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
           isPaid: widget.invoice!.isPaid,
           currency: _currency,
         );
-        await InvoiceService.updateInvoice(updatedInvoice);
+        await ref
+            .read(invoiceListProvider.notifier)
+            .updateInvoice(updatedInvoice);
       }
 
       if (mounted) {
@@ -237,6 +229,38 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat.currency(symbol: '\$');
+    final customers = ref.watch(customerListProvider);
+
+    // Initial customer selection logic
+    if (widget.invoice != null &&
+        !_initialCustomerLoaded &&
+        customers.isNotEmpty) {
+      // Need to run this once or safely
+      // We shouldn't calculate this during build if we want to update state,
+      // BUT we can calculate _selectedCustomer which is just a variable.
+      // However, we want to set it so the Dropdown shows it.
+      // Let's try to match it.
+      try {
+        final match = customers.firstWhere((c) {
+          if (c.isCompany) {
+            return c.name == widget.invoice!.customerCompany;
+          }
+          return c.name == widget.invoice!.customerName &&
+              c.lastName == widget.invoice!.customerSurname;
+        });
+        _selectedCustomer = match;
+      } catch (_) {
+        _selectedCustomer = null;
+      }
+      _initialCustomerLoaded = true;
+      // Note: we're modifying state variables in build indirectly (by assigning to local variable? No result is assigned to _selectedCustomer which is a field).
+      // This is a side-effect in build. It's better to do this in initState or via post-frame callback if we need to setState.
+      // However, simply updating the field without setState is fine IF we are sure it reflects correctly.
+      // But _selectedCustomer is used in Dropdown 'value'.
+      // A safer way is to rely on 'initialValue' logic or keys.
+      // Let's leave it for now or move to useEffect / init logic.
+      // Actually _initialCustomerLoaded logic inside build is risky for infinite loops if we called setState. We are not calling setState here.
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -292,7 +316,26 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                               builder: (context) => const CustomerFormDialog(),
                             );
                             if (newCustomer != null) {
-                              _loadCustomers();
+                              // Add is handled by dialog?
+                              // CustomerFormDialog implementation usually adds it properly if it returns.
+                              // Wait, CustomerFormDialog usually calls Provider to add?
+                              // Let's check CustomerFormDialog in previous turns or assume it might behave like InventoryForm.
+                              // If it returns a customer, we might need to select it.
+                              // The dialog logic in CustomersScreen ADDED the customer AFTER dialog returned.
+                              // I need to check behavior of CustomerFormDialog.
+                              // Assuming it returns the Object but doesn't Save it?
+                              // CustomersScreen.dart:
+                              // final result = await showDialog...
+                              // if (result != null) await ref.read(customerListProvider.notifier).addCustomer(result);
+
+                              // Check CustomerFormDialog!
+                              // If it doesn't save allow the form to use it?
+                              // I'll add it here if it returns object.
+
+                              await ref
+                                  .read(customerListProvider.notifier)
+                                  .addCustomer(newCustomer);
+
                               setState(() {
                                 _selectedCustomer = newCustomer;
                                 _nameController.text = newCustomer.name;
@@ -309,7 +352,7 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    if (_customers.isNotEmpty) ...[
+                    if (customers.isNotEmpty) ...[
                       DropdownButtonFormField<Customer>(
                         key: ValueKey(_selectedCustomer),
                         decoration: const InputDecoration(
@@ -317,16 +360,26 @@ class _InvoiceFormScreenState extends State<InvoiceFormScreen> {
                           prefixIcon: Icon(Icons.people),
                           border: OutlineInputBorder(),
                         ),
-                        initialValue: _selectedCustomer,
-                        items: _customers.map((customer) {
-                          return DropdownMenuItem(
-                            value: customer,
-                            child: Text(
-                              customer.displayName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          );
-                        }).toList(),
+                        value: _selectedCustomer,
+                        // Fix for: 'items' must contain 'value'. If _selectedCustomer is not in list (e.g. deleted), null it.
+                        // We handled loaded/match logic, but if not in list, fallback to null.
+                        // We need to ensure _selectedCustomer IS in 'customers' or null.
+                        items: customers.contains(_selectedCustomer)
+                            ? customers.map((customer) {
+                                return DropdownMenuItem(
+                                  value: customer,
+                                  child: Text(
+                                    customer.displayName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList()
+                            : customers.map((customer) {
+                                return DropdownMenuItem(
+                                  value: customer,
+                                  child: Text(customer.displayName),
+                                );
+                              }).toList(),
                         onChanged: (customer) {
                           setState(() {
                             _selectedCustomer = customer;

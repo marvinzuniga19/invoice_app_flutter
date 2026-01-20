@@ -1,27 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/customer.dart';
-import '../services/database_service.dart';
+import '../providers/customer_provider.dart';
 import 'customer_form_dialog.dart';
 
-class CustomersScreen extends StatefulWidget {
+class CustomersScreen extends ConsumerStatefulWidget {
   const CustomersScreen({super.key});
 
   @override
-  State<CustomersScreen> createState() => _CustomersScreenState();
+  ConsumerState<CustomersScreen> createState() => _CustomersScreenState();
 }
 
-class _CustomersScreenState extends State<CustomersScreen> {
+class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
   List<Customer> _getFilteredCustomers() {
-    final customers = DatabaseService.getAllCustomers();
-    if (_searchQuery.isEmpty) return customers;
-
-    return customers.where((customer) {
-      return customer.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          customer.email.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+    return ref.read(customerListProvider.notifier).filter(_searchQuery);
   }
 
   Future<void> _showCustomerDialog([Customer? customer]) async {
@@ -31,6 +26,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
 
     if (result != null) {
+      await ref.read(customerListProvider.notifier).addCustomer(result);
       setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -65,7 +61,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
 
     if (confirmed == true) {
-      await DatabaseService.deleteCustomer(customer.id);
+      await ref.read(customerListProvider.notifier).deleteCustomer(customer.id);
       setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(
@@ -77,6 +73,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(customerListProvider); // Watch to trigger rebuilds
     final customers = _getFilteredCustomers();
 
     return Scaffold(
